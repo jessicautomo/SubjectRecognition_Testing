@@ -116,4 +116,3 @@ during tracking.
 https://medium.com/@khwabkalra1/object-tracking-2fe4127e58bf#:~:text=Mathematical%20Basis%3A%20The%20CSRT%20algorithm,is%20updated%20iteratively%20during%20tracking.'''
 
 #bbox = cv2.selectROI("Frame", frame, False)  # select the object to track(manual selection). color segmentation?
-# test!!
