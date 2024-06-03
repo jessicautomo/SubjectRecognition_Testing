@@ -2,8 +2,10 @@ import cv2
 import numpy as np
 import time
 
-# Initialize CSRT tracker
-tracker = cv2.TrackerCSRT_create()
+roi_lost = False
+
+# Initialize KCF tracker
+tracker = cv2.TrackerKCF_create()
 
 # Take camera feed from default camera 0 -> use IP address of camera
 video = cv2.VideoCapture(0)
@@ -20,14 +22,14 @@ cv2.imshow('hsv',hsv_image)
 # Define color ranges for red and green in HSV
 # Define the lower and upper HSV values for red
 lower_red = np.array([0, 120, 140])
-upper_red = np.array([10, 200, 210])
+upper_red = np.array([10, 205, 225])
 
-# Create a mask for red pixels using cv2.inRange
+# Create a mask for red pixels using cv2.inRangeq
 mask_red = cv2.inRange(hsv_image, lower_red, upper_red)
 
 # Define the lower and upper HSV values for green
-lower_green = np.array([60, 60, 50])
-upper_green = np.array([90, 170, 255])
+lower_green = np.array([50, 10, 40])
+upper_green = np.array([170, 170, 255])
 
 # Create a mask for green pixels using cv2.inRange
 mask_green = cv2.inRange(hsv_image, lower_green, upper_green)
@@ -37,8 +39,6 @@ cv2.imshow('Green',mask_green)
 # Combine the masks to select region with both red and green
 combined_mask = cv2.bitwise_and(~mask_green,~mask_red)
 cv2.imshow('Mask',combined_mask)
-result = cv2.bitwise_and(frame, frame, mask=~combined_mask)
-cv2.imshow('Result',result)
 
 # Remove background noise
 blurred = cv2.GaussianBlur(combined_mask, (5, 5), 0)
@@ -100,6 +100,41 @@ while True:
 
         # Draw bounding box on the object
         cv2.rectangle(frame, (x, y), (x + w, y + h), (red, 255, 0), 2)
+    elif not success and not roi_lost: # if bounding box is lost
+        roi_lost = True
+        mask_red = cv2.inRange(frame, lower_red, upper_red)
+        mask_green = cv2.inRange(frame, lower_green, upper_green)
+
+        # Combine the masks to select region with both red and green
+        combined_mask = cv2.bitwise_and(~mask_green, ~mask_red)
+
+        # Filter the frame with the occlusion
+        result = cv2.bitwise_and(frame, frame, mask=combined_mask)
+        #cv2.imshow('result',result)
+
+        gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+
+        # Threshold the grayscale image to create a binary mask
+        _, binary_mask = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+        #binary_mask = cv2.bitwise_not(binary_mask)
+        cv2.imshow('binary', binary_mask)
+
+        # Find contours in the binary mask
+        contours1, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Filter out the contours based on their area
+        largest_contour1 = max(contours1, key=cv2.contourArea)
+
+        # Get the bounding box coordinates of the largest contour, which should be coordinates of occlusion
+        x, y, w, h = cv2.boundingRect(largest_contour1)
+        print(x,y,w,h)
+
+        # Draw the bounding box on the original image
+        result_image = cv2.rectangle(result.copy(), (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # Display the result
+        cv2.imshow('Result', result_image)
+        cv2.imshow('Last frame', frame)
 
     cv2.imshow("Frame", frame)
 
@@ -108,11 +143,3 @@ while True:
 
 video.release()
 cv2.destroyAllWindows()
-
-'''
-The CSRT algorithm employs a discriminative correlation filter to estimate the object’s location and appearance.
-This filter learns the object’s appearance using positive and negative training samples and is updated iteratively
-during tracking.
-https://medium.com/@khwabkalra1/object-tracking-2fe4127e58bf#:~:text=Mathematical%20Basis%3A%20The%20CSRT%20algorithm,is%20updated%20iteratively%20during%20tracking.'''
-
-#bbox = cv2.selectROI("Frame", frame, False)  # select the object to track(manual selection). color segmentation?
